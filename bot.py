@@ -16,33 +16,36 @@ class competencia():
 			self.url = dicc['websiteUrl']
 		except KeyError:
 			self.url = ""
-	def __eq__(self,other):
-		return self.nombre==other
 
-def solve():
-	respuesta = requests.get("https://codeforces.com/api/contest.list")
-	mensaje = ""
+def solve(b: bool):
+	respuesta = requests.get("https://codeforces.com/api/contest.list?lang=en")
 	nuevo = False
 	l = []
 	try:
 		f = open("competencias.txt","r+",encoding="utf-8")
-		l = f.readline().split('-')[:-1]
+		l = f.readline()[:-1].split('~')
 	except FileNotFoundError:
 		f = open("competencias.txt","w+",encoding="utf-8")
 
+	compes = []
+	compes_nuevas = []
 	for i in respuesta.json()["result"]:
-		if i['name'] in l:
-			mensaje = f"{i['name']} en {convertir_horas(i['relativeTimeSeconds'])} horas\n"+mensaje
-		elif i['phase']=="BEFORE":
-			mensaje = f"NUEVA!: {i['name']} en {convertir_horas(i['relativeTimeSeconds'])} horas\n"+mensaje
-			f.write(i['name']+"-")
-			nuevo = True
+		if i['phase']=='BEFORE':
+			if i['name'] in l:
+				compes.append(f"{i['type']}: {i['name']} en {convertir_horas(i['relativeTimeSeconds'])} horas")
+			else:
+				compes_nuevas.append(f"NUEVA {i['type']}!: {i['name']} en {convertir_horas(i['relativeTimeSeconds'])} horas")
+				f.write(i['name']+"~")
+				nuevo = True
 	f.close()
-	return "```autohotkey\n"+mensaje+'```',nuevo
+	if b:
+		return '```autohotkey\n'+'\n'.join(compes_nuevas[::-1])+'\n```',nuevo
+	else:
+		return '```autohotkey\n'+'\n'.join(compes_nuevas[::-1]+compes[::-1])+'\n```'
 
 @tasks.loop(hours=8)
 async def chequear_compes():
-	imprimir, new = solve()
+	imprimir, new = solve(1)
 	if new:
 		guild = discord.utils.get(bot.guilds,name=GUILD)
 		canal = discord.utils.get(guild.text_channels,name="competencias")
@@ -61,12 +64,11 @@ bot = commands.Bot(command_prefix='!',intents=intents)
 
 @bot.event
 async def on_ready():
-	#print("ok")
 	chequear_compes.start()
 
 @bot.command(name="contest",help="Muestra las competencias actualmente disponibles en CF")
 async def contest(ctx):
-	imprimir = solve()[0]
+	imprimir = solve(0)
 	await ctx.send(imprimir)
 
 bot.run(TOKEN)

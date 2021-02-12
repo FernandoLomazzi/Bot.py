@@ -7,41 +7,37 @@ def convertir_horas(relative: int):
 	#horario = [math.ceil(relative/3600),int((relative/60))%60,relative%60]
 	return math.ceil(relative/3600)
 
-class competencia():
-	def __init__(self,dicc):
-		self.nombre = dicc['name']
-		self.tipo = dicc['type']
-		self.faltan = convertir_horas(dicc['relativeTimeSeconds'])
-		try:
-			self.url = dicc['websiteUrl']
-		except KeyError:
-			self.url = ""
+def consultar_API():
+	respuesta = requests.get("https://codeforces.com/api/contest.list?lang=en")
+	return respuesta.json()['result']
 
 def solve(b: bool):
-	respuesta = requests.get("https://codeforces.com/api/contest.list?lang=en")
 	nuevo = False
-	l = []
 	try:
 		f = open("competencias.txt","r+",encoding="utf-8")
-		l = f.readline()[:-1].split('~')
+		comp = [x.strip() for x in f.readlines()]
 	except FileNotFoundError:
 		f = open("competencias.txt","w+",encoding="utf-8")
-
-	compes = []
-	compes_nuevas = []
-	for i in respuesta.json()["result"]:
-		if i['phase']=='BEFORE':
-			if i['name'] in l:
-				compes.append(f"{i['type']}: {i['name']} en {convertir_horas(i['relativeTimeSeconds'])} horas")
-			else:
-				compes_nuevas.append(f"NUEVA {i['type']}!: {i['name']} en {convertir_horas(i['relativeTimeSeconds'])} horas")
-				f.write(i['name']+"~")
-				nuevo = True
-	f.close()
+		comp = []
+	texto = ""
 	if b:
-		return '```autohotkey\n'+'\n'.join(compes_nuevas[::-1])+'\n```',nuevo
+		for i in consultar_API():
+			tiempo = convertir_horas(i['relativeTimeSeconds'])
+			if 0<=tiempo<=36 and i['name'] not in comp:
+				nuevo = True
+				texto = f"Mañana {i['type']}!: {i['name']} en {tiempo} horas\n"+texto
+				f.write(i['name'])
+				f.write('\n')
+		f.close()
+		return '```autohotkey\n'+texto+'```',nuevo
 	else:
-		return '```autohotkey\n'+'\n'.join(compes_nuevas[::-1]+compes[::-1])+'\n```'
+		for i in consultar_API():
+			if i['phase'] == 'BEFORE':
+				texto = f"{i['type']}: {i['name']} en {convertir_horas(i['relativeTimeSeconds'])} horas\n"+texto
+			else:
+				break
+		f.close()
+		return '```autohotkey\n'+texto+'```'		
 
 @tasks.loop(hours=8)
 async def chequear_compes():
